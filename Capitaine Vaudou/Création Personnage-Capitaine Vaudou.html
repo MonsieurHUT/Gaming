@@ -1,0 +1,1096 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Création de personnage — v2.3 (autonome)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; line-height: 1.35; }
+    body { margin: 16px; max-width: 1250px; }
+    h1, h2 { margin: 0 0 12px 0; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin: 12px 0; }
+    label { display:block; font-size: 12px; opacity:.85; margin-bottom:6px; }
+    input[type="number"] { padding: 8px; width: 240px; }
+    button { padding: 10px 14px; cursor: pointer; }
+    .box { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin: 12px 0; }
+    pre { white-space: pre-wrap; word-break: break-word; margin:0; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .ok { color:#070; } .warn{ color:#7a4; } .err{ color:#b00; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+    .small { font-size: 12px; opacity: .85; }
+  </style>
+</head>
+<body>
+  <h1>Création de personnage — v2.3</h1>
+
+  <div class="box">
+    <div class="row">
+      <div>
+        <label for="seed">Seed (optionnel)</label>
+        <input id="seed" type="number" placeholder="ex. 12345" />
+      </div>
+      <div>
+        <button id="generateBtn">Générer un personnage</button>
+      </div>
+    </div>
+    <div id="status" class="mono"></div>
+    <div class="small mono">
+      Sorties : fiche utile (gauche) + journal des calculs/décisions (droite).
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="box">
+      <h2>Fiche (sortie utile)</h2>
+      <pre id="sheetOut" class="mono"></pre>
+    </div>
+    <div class="box">
+      <h2>Journal (calculs & décisions)</h2>
+      <pre id="logOut" class="mono"></pre>
+    </div>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+
+  // =========================================================
+  // DONNÉES (extraites du .ods v2.3)
+  // =========================================================
+  const DATA = {"ARCHETYPES":[{"range":"1-10","archetype":"Déserteur","zone":"Vieux Monde","impact_composantes":"Au moins 5 en Corps","impact_moyens":"Au moins 3 en Action","impact_cibles":"Humain -1Artificiel +1","impact_energie":"Pas d’énergie magique","impact_talents":"Armes à feu +1\nArme blanche (type à préciser) +1"},{"range":"11-20","archetype":"Proscrit","zone":"Vieux Monde","impact_composantes":"Au moins 5 en Coeur et/ou en Esprit","impact_moyens":"","impact_cibles":"Humain -1","impact_energie":"Pas d’énergie magique","impact_talents":"Pas de consigne"},{"range":"21-30","archetype":"Prostitué(e)","zone":"Vieux Monde ou Afrique ou Nouveau Monde, à chance égale pour chacun : lancer 1D3","impact_composantes":"Au moins 5 en Corps et/ou en Coeur","impact_moyens":"Au moins 3 en Résistance","impact_cibles":"Humain +1","impact_energie":"Pas d’énergie magique","impact_talents":"Comédie (déguisement) +1Bagarre +1"},{"range":"31-40","archetype":"Hérétique","zone":"Vieux Monde","impact_composantes":"Au moins 5 en Coeur et/ou en Esprit","impact_moyens":"Au moins 3 en Résistance","impact_cibles":"Surnaturel +1","impact_energie":"Pas d’énergie magique","impact_talents":"Discrétion +1"},{"range":"41-50","archetype":"Occultiste","zone":"Vieux Monde","impact_composantes":"Au moins 5 en Coeur","impact_moyens":"Au moins 3 en Action","impact_cibles":"Surnaturel +1","impact_energie":"Celle de sa religion (Foi 1 ou Magie noire 1)","impact_talents":"Ceux de sa religion"},{"range":"51-60","archetype":"Esclave noir","zone":"Afrique","impact_composantes":"Aucune consigne","impact_moyens":"Au moins 3 en Résistance","impact_cibles":"Aucune consigne","impact_energie":"Pas d’énergie magique","impact_talents":"Pas de consigne"},{"range":"61-70","archetype":"Esclave noir – sorcier vaudou","zone":"Afrique","impact_composantes":"Au moins 5 en Coeur","impact_moyens":"Au moins 3 en Action","impact_cibles":"Surnaturel +1","impact_energie":"Vaudou 1","impact_talents":"Pratiques vaudoues +1"},{"range":"71-80","archetype":"Coeur blessé","zone":"Vieux Monde","impact_composantes":"Aucune consigne","impact_moyens":"Au moins 3 en Perception","impact_cibles":"Humain -1","impact_energie":"Pas d’énergie magique","impact_talents":"Pas de consigne"},{"range":"81-90","archetype":"Déporté","zone":"Vieux Monde","impact_composantes":"Aucune consigne","impact_moyens":"Au moins 3 en Résistance","impact_cibles":"Aucune consigne","impact_energie":"Pas d’énergie magique","impact_talents":"Bagarre +1"},{"range":"91-92","archetype":"Autochtone – Maya","zone":"Nouveau Monde","impact_composantes":"Aucune consigne","impact_moyens":"Aucune consigne","impact_cibles":"Aucune consigne","impact_energie":"Pas d’énergie magique","impact_talents":"Pas de consigne"},{"range":"93","archetype":"Autochtone – Devin Maya","zone":"Nouveau Monde","impact_composantes":"Au moins 5 en Coeur","impact_moyens":"Au moins 3 en Action","impact_cibles":"Surnaturel +1","impact_energie":"K’áaxil 1","impact_talents":"Pratiques des Anciens +1"},{"range":"94","archetype":"Autochtone – Guérisseur Maya","zone":"Nouveau Monde","impact_composantes":"Au moins 5 en Coeur","impact_moyens":"Au moins 3 en Action","impact_cibles":"Surnaturel +1","impact_energie":"K’áaxil 1","impact_talents":"Pratiques des Anciens +1"},{"range":"95-96","archetype":"Autochtone – Arawak","zone":"Nouveau Monde","impact_composantes":"Aucune consigne","impact_moyens":"Aucune consigne","impact_cibles":"Aucune consigne","impact_energie":"Pas d’énergie magique","impact_talents":"Pas de consigne"},{"range":"97","archetype":"Autochtone – Chaman Arawak","zone":"Nouveau Monde","impact_composantes":"Au moins 5 en Coeur","impact_moyens":"Au moins 3 en Action","impact_cibles":"Surnaturel +1","impact_energie":"K’áaxil 1","impact_talents":"Coutume des Zemis +1"},{"range":"98-99","archetype":"Autochtone – Kalinago","zone":"Nouveau Monde","impact_composantes":"Aucune consigne","impact_moyens":"Aucune consigne","impact_cibles":"Aucune consigne","impact_energie":"Pas d’énergie magique","impact_talents":"Arme blanche (type à préciser) +1"},{"range":"100","archetype":"Autochtone – Chaman Kalinago","zone":"Nouveau Monde","impact_composantes":"Au moins 5 en Coeur","impact_moyens":"Au moins 3 en Action","impact_cibles":"Surnaturel +1","impact_energie":"K’áaxil 1","impact_talents":"Voie des Esprits +1"}],"ORIGINE_VM":[{"range":"1-10","pays":"Royaume de France","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"11-19","pays":"Royaume d’Espagne","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"20-28","pays":"Royaumes d’Angleterre, d’Écosse et d’Irlande","rel_non":"01-95 – Protestant puritain 96-100 - Judaïsme","rel_occ":"01-70 – Protestant puritain 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"29-37","pays":"Saint-Empire romain germanique","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"38-44","pays":"Provinces-Unies des Pays-Bas","rel_non":"01-95 – Calviniste 96-100 - Judaïsme","rel_occ":"01-70 – Calviniste 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"45-48","pays":"Royaume de Portugal","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"49-51","pays":"Royaume de Suède","rel_non":"01-95 – Luthérien 96-100 - Judaïsme","rel_occ":"01-70 – Luthérien 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"52-54","pays":"Danemark-Norvège","rel_non":"01-95 – Luthérien 96-100 - Judaïsme","rel_occ":"01-70 – Luthérien 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"55-57","pays":"Tsarat de Russie","rel_non":"01-95 – Orthodoxe 96-100 - Judaïsme","rel_occ":"01-70 – Orthodoxe 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"58-60","pays":"Empire ottoman","rel_non":"01-95 – Musulman sunnite 96-100 - Judaïsme","rel_occ":"01-70 – Musulman sunnite 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"61-66","pays":"Royaume de Naples","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"67-72","pays":"Royaume de Sicile","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"73-76","pays":"Duché de Milan","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"77-79","pays":"États pontificaux","rel_non":"01-98 – Catholique 99-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"80-83","pays":"République de Venise","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"84-86","pays":"Grand-duché de Toscane","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"87-89","pays":"Duché de Savoie","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"},{"range":"90-100","pays":"République de Gênes","rel_non":"01-95 – Catholique 96-100 - Judaïsme","rel_occ":"01-70 – Catholique 71-95 - Voie obscure - 96-100 - Judaïsme"}],"ORIGINE_AF":[{"range":"1-8","peuple":"Wolof","religion":"Vaudou"},{"range":"9-16","peuple":"Serer","religion":"Vaudou"},{"range":"17-24","peuple":"Mandé (Malinké, Bambara)","religion":"Vaudou"},{"range":"25-32","peuple":"Fula / Peul","religion":"Vaudou"},{"range":"33-40","peuple":"Akan","religion":"Vaudou"},{"range":"41-48","peuple":"Ewe / Fon","religion":"Vaudou"},{"range":"49-56","peuple":"Yoruba","religion":"Vaudou"},{"range":"57-64","peuple":"Haoussas","religion":"Vaudou"},{"range":"65-72","peuple":"Igbo","religion":"Vaudou"},{"range":"73-80","peuple":"Kongo","religion":"Vaudou"},{"range":"81-88","peuple":"Mbundu","religion":"Vaudou"},{"range":"89-94","peuple":"Bantous / Swahili","religion":"Vaudou"},{"range":"95-100","peuple":"Malgaches","religion":"Vaudou"}],"ORIGINE_NM":[{"range":"1-33","peuple":"Mayas","religion":"Cosmovision maya"},{"range":"34-67","peuple":"Arawaks","religion":"Animisme arawak (zemiisme)"},{"range":"68-100","peuple":"Kalinago (Caraïbes)","religion":"Animisme kalinago"}],"TALENTS":[{"token":"Architecture","col":"X"},{"token":"Artillerie (p)","col":"X"},{"token":"Astronomie","col":"X"},{"token":"Falsification","col":"X"},{"token":"Langue étrangère (p)","col":"X"},{"token":"Lire sur les lèvres","col":"X"},{"token":"Lire et écrire","col":"X"},{"token":"Mathématiques","col":"X"},{"token":"Médecine","col":"X"},{"token":"Navigation (p)","col":"X"},{"token":"Serrurerie","col":"X"},{"token":"Coutume des Zemis","col":"X"},{"token":"Esotérisme – Connaissance de la Bible (s)","col":"X"},{"token":"Esotérisme – Connaissance du Coran (s)","col":"X"},{"token":"Esotérisme – Connaissance de la Torah (s)","col":"X"},{"token":"Langue classique – Arabe classique (s)","col":"X"},{"token":"Langue classique – Latin (s)","col":"X"},{"token":"Langue étrangère – Hébreu (p) (s)","col":"X"},{"token":"Pratiques des Anciens (s)","col":"X"},{"token":"Pratiques démoniaques (s)","col":"X"},{"token":"Sorcellerie (s)","col":"X"},{"token":"Voie des Esprits (s)","col":"X"},{"token":"Armes à feu (p)","col":"-4"},{"token":"Art de la guerre (p)","col":"-4"},{"token":"Cartographie (p)","col":"-4"},{"token":"Charpenterie (p)","col":"-4"},{"token":"Équitation","col":"-4"},{"token":"Étiquette","col":"-4"},{"token":"Histoire","col":"-4"},{"token":"Musique (chant, danse, instrument)","col":"-4"},{"token":"Natation","col":"-4"},{"token":"Nature (faune et flore)","col":"-4"},{"token":"Pratiques vaudoues","col":"-4"},{"token":"Voilerie (p)","col":"-4"},{"token":"Arme blanche (type à préciser) (p)","col":"-2"},{"token":"Bricolage","col":"-2"},{"token":"Comédie (déguisement)","col":"-2"},{"token":"Commandement (p)","col":"-2"},{"token":"Escalade","col":"-2"},{"token":"Histoire des pirates (p)","col":"-2"},{"token":"Langue du navire (p)","col":"-2"},{"token":"Premiers soins","col":"-2"},{"token":"Survie (pêche, chasse, pistage, orientation) (p)","col":"-2"},{"token":"Vol à la tire","col":"-2"},{"token":"Athlétisme","col":"0"},{"token":"Bagarre (p)","col":"0"},{"token":"Commerce (p)","col":"0"},{"token":"Cuisine","col":"0"},{"token":"Dessin","col":"0"},{"token":"Discours","col":"0"},{"token":"Discrétion","col":"0"},{"token":"Observation","col":"0"}],"RELIGIONS":[{"religion":"Catholique","energy":"Foi 1","talents":"Esotérisme – Connaissance de la Bible : +1Langue classique – Latin : 0"},{"religion":"Protestant puritain","energy":"Foi 1","talents":"Esotérisme – Connaissance de la Bible : +1Langue classique – Latin : 0"},{"religion":"Calviniste","energy":"Foi 1","talents":"Esotérisme – Connaissance de la Bible : +1Langue classique – Latin : 0"},{"religion":"Luthérien","energy":"Foi 1","talents":"Esotérisme – Connaissance de la Bible : +1Langue classique – Latin : 0"},{"religion":"Orthodoxe","energy":"Foi 1","talents":"Esotérisme – Connaissance de la Bible : +1Langue classique – Latin : 0"},{"religion":"Musulman sunnite","energy":"Foi 1","talents":"Esotérisme – Connaissance du Coran : +1Langue classique – Arabe classique : 0"},{"religion":"Judaïsme","energy":"Foi 1","talents":"Esotérisme – Connaissance de la Torah : +1Langue étrangère – Hébreu : +1"},{"religion":"Vaudou","energy":"Vaudou 1","talents":"Pratiques vaudoues : +1"},{"religion":"Cosmovision maya","energy":"K’áaxil 1","talents":"Pratiques des Anciens : +1"},{"religion":"Animisme arawak (zemiisme)","energy":"K’áaxil 1","talents":"Coutume des Zemis : +1"},{"religion":"Animisme kalinago","energy":"K’áaxil 1","talents":"Voies des Esprits : +1"},{"religion":"Voie obscure","energy":"Magie noire 1","talents":"Pratiques démoniaques : +1 ou Sorcellerie : +1, avec une chance égale pour chacun (choisir au hasard)"}],"LANGUES":{"Royaume de France":"Français","Royaume d’Espagne":"Castillan","Royaumes d’Angleterre, d’Écosse et d’Irlande":"Anglais","Saint-Empire romain germanique":"Allemand","Provinces-Unies des Pays-Bas":"Néerlandais","Royaume de Portugal":"Portugais","Royaume de Suède":"Suédois","Danemark-Norvège":"Danois","Tsarat de Russie":"Russe","Empire ottoman":"Turc ottoman","Royaume de Naples":"Italien (napolitain)","Royaume de Sicile":"Italien (sicilien)","Duché de Milan":"Italien (milanese)","États pontificaux":"Italien (romain)","République de Venise":"Vénitien","Grand-duché de Toscane":"Toscan","Duché de Savoie":"Francoprovençal (savoyard)","République de Gênes":"Génois","Wolof":"Wolof","Serer":"Sérère","Mandé (Malinké, Bambara)":"Mandé (bambara/malinké)","Fula / Peul":"Peul","Akan":"Akan","Ewe / Fon":"Ewe / Fon","Yoruba":"Yoruba","Haoussas":"Haoussa","Igbo":"Igbo","Bantous / Swahili":"Swahili","Malgaches":"Malgache","Mbundu":"Kimbundu","Kongo":"Kikongo","Mayas":"Maya","Arawaks":"Arawak","Kalinago (Caraïbes)":"Kalinago"},"ARMES":{"Vieux Monde":["Arbalètes","Arcs","Armes d’hast","Armes de jet","Dagues","Epées","Epées mixtes","Frondes","Haches","Javelots","Masses","Sabres"],"Afrique":["Arcs","Armes d’hast","Armes de jet","Dagues","Epées","Frondes","Haches","Javelots","Masses","Sabres","Sarbacanes"],"Nouveau Monde":["Arcs","Armes d’hast","Armes de jet","Dagues","Epées","Frondes","Haches","Javelots","Masses","Sabres","Sarbacanes"]},"INSTRUMENTS":{"Vieux Monde":["Tambours","Flûtes","Cornemuse","Cithares","Violes","Harpes"],"Afrique":["Tambours","Flûtes","Harpes","Arc musical","Xylophone","Racleur"],"Nouveau Monde":["Tambours","Flûtes","Arc musical","Xylophone","Racleur"]}};
+
+  // =========================================================
+  // OUTILS: journal
+  // =========================================================
+  function makeLog() {
+    const lines = [];
+    const push = (tag, obj) => {
+      if (typeof obj === "string") lines.push(`[${tag}] ${obj}`);
+      else lines.push(`[${tag}] ${JSON.stringify(obj, null, 2)}`);
+    };
+    return { push, text: () => lines.join("\n\n") };
+  }
+
+  // =========================================================
+  // OUTILS: RNG (seedable)
+  // =========================================================
+  function hashStringToUint32(str) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function() {
+      a |= 0;
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function makeRng(seedMaybe) {
+    const seed = (seedMaybe !== "" && seedMaybe !== null && seedMaybe !== undefined && Number.isFinite(Number(seedMaybe)))
+      ? (Number(seedMaybe) >>> 0)
+      : hashStringToUint32(String(Date.now()));
+    const rnd = mulberry32(seed);
+    return {
+      seed,
+      rollInt(min, max) { return min + Math.floor(rnd() * (max - min + 1)); },
+      pickOne(arr) { return arr[this.rollInt(0, arr.length - 1)]; },
+      chancePct(pct) { return this.rollInt(1, 100) <= pct; }
+    };
+  }
+
+  // =========================================================
+  // NORMALISATION / PARSING UTILITAIRES
+  // =========================================================
+  function norm(s) {
+    return String(s ?? "")
+      .replace(/\u00A0/g, " ")
+      .replace(/[–—]/g, "-")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  
+  function deglueTalentDirectives(text) {
+  // Objectif : transformer "X +1Y +1" en "X +1\nY +1"
+  // et "A : +1B : 0" en "A : +1\nB : 0"
+  // uniquement quand un niveau (+1 ou 0) est immédiatement suivi d'une lettre.
+  return String(text ?? "")
+    .replace(/\u00A0/g, " ")
+    .replace(/\r/g, "")
+    .replace(/(\+?1|0)\s*(?=[A-Za-zÀ-ÖØ-öø-ÿ])/g, "$1\n");
+  }
+
+  function parseRangeSpec(spec) {
+    const s = norm(spec);
+    if (!s) return [];
+    const parts = s.split(/[,;]/).map(x => x.trim()).filter(Boolean);
+    const out = [];
+    for (const p of parts) {
+      const m = p.match(/^(\d{1,3})\s*-\s*(\d{1,3})$/);
+      if (m) { out.push([+m[1], +m[2]]); continue; }
+      const n = parseInt(p, 10);
+      if (Number.isFinite(n)) out.push([n, n]);
+    }
+    return out;
+  }
+
+  function matchD100(d, spec) {
+    const segs = parseRangeSpec(spec);
+    return segs.some(([a,b]) => d >= Math.min(a,b) && d <= Math.max(a,b));
+  }
+
+  function pickByD100(rows, d100, log, ctx) {
+    const m = rows.filter(r => matchD100(d100, r.range));
+    log.push("table_lookup", { ctx, d100, matches: m.length });
+    if (m.length !== 1) throw new Error(`Table ambiguë/incomplète (${ctx}) : d100=${d100} matches=${m.length}`);
+    return m[0];
+  }
+
+  // =========================================================
+  // TALENTS: suffixes (p)/(s) gérés automatiquement
+  // =========================================================
+  function parseTalentToken(token) {
+    const t = norm(token);
+    const flags = { p: false, s: false };
+    let base = t;
+
+    // Extraire toutes occurrences "(p)" et "(s)" en suffixe (tolère multiples)
+    // Exemple: "X (p) (s)" => base "X"
+    const rx = /\((p|s)\)\s*$/i;
+    while (rx.test(base)) {
+      const m = base.match(rx);
+      if (!m) break;
+      if (m[1].toLowerCase() === "p") flags.p = true;
+      if (m[1].toLowerCase() === "s") flags.s = true;
+      base = base.replace(rx, "").trim();
+    }
+
+    // Normalisation minimale non-suffixe (pour éviter blocages sur une pluralisation isolée observée dans Religions)
+    // "Voies des Esprits" -> "Voie des Esprits"
+    if (base === "Voies des Esprits") base = "Voie des Esprits";
+
+    return { token: t, base, flags };
+  }
+
+  // Index des talents disponibles (par token exact)
+  const TALENTS_BY_TOKEN = new Map(DATA.TALENTS.map(t => [norm(t.token), { token: norm(t.token), col: norm(t.col), meta: parseTalentToken(t.token) }]));
+  // Index par base (peut correspondre à plusieurs tokens si variantes)
+  const TALENTS_BY_BASE = (() => {
+    const m = new Map();
+    for (const t of DATA.TALENTS) {
+      const meta = parseTalentToken(t.token);
+      const b = meta.base;
+      if (!m.has(b)) m.set(b, []);
+      m.get(b).push({ token: norm(t.token), col: norm(t.col), meta });
+    }
+    return m;
+  })();
+
+  function resolveTalentRef(ref, log, ctx) {
+    // Ref peut venir sans suffixes: on résout vers un token existant.
+    const raw = norm(ref);
+    const meta = parseTalentToken(raw);
+
+    // 1) token exact
+    if (TALENTS_BY_TOKEN.has(raw)) {
+      const hit = TALENTS_BY_TOKEN.get(raw);
+      log.push("talent_resolve", { ctx, ref: raw, mode: "exact", resolved: hit.token });
+      return hit;
+    }
+
+    // 2) base unique
+    const cands = TALENTS_BY_BASE.get(meta.base) || [];
+    if (cands.length === 1) {
+      log.push("talent_resolve", { ctx, ref: raw, mode: "base_unique", resolved: cands[0].token });
+      return cands[0];
+    }
+
+    // 3) base multiple => heuristique stable: préfère non-(s), puis non-(p), puis 1er
+    if (cands.length > 1) {
+      const sorted = [...cands].sort((a,b) => {
+        const as = a.meta.flags.s ? 1 : 0;
+        const bs = b.meta.flags.s ? 1 : 0;
+        if (as !== bs) return as - bs;
+        const ap = a.meta.flags.p ? 1 : 0;
+        const bp = b.meta.flags.p ? 1 : 0;
+        if (ap !== bp) return ap - bp;
+        return a.token.localeCompare(b.token, "fr");
+      });
+      log.push("talent_resolve", { ctx, ref: raw, mode: "base_multi_heuristic", candidates: sorted.map(x=>x.token), resolved: sorted[0].token });
+      return sorted[0];
+    }
+
+    throw new Error(`Talent introuvable (référence=${raw}, base=${meta.base})`);
+  }
+
+  // =========================================================
+  // IMPACTS: contraintes Composantes/Moyens
+  // =========================================================
+  function parseAtLeastConstraint(text) {
+    const t = norm(text);
+    if (!t || /^Aucune consigne$/i.test(t)) return { mins: [], anyOf: null };
+    const m = t.match(/Au\s+moins\s+(\d+)\s+en\s+(.+)$/i);
+    if (!m) throw new Error("Impact illisible: " + text);
+    const minVal = parseInt(m[1], 10);
+    const rest = norm(m[2]);
+    if (/et\/ou/i.test(rest)) {
+      const parts = rest.split(/et\/ou/i).map(s => norm(s)).filter(Boolean);
+      if (parts.length !== 2) throw new Error("Impact et/ou illisible: " + text);
+      return { mins: [], anyOf: { min: minVal, keys: parts } };
+    }
+    return { mins: [{ key: rest, min: minVal }], anyOf: null };
+  }
+
+  function enumerateTriplets(min, max, sum) {
+    const out = [];
+    for (let a = min; a <= max; a++) for (let b = min; b <= max; b++) {
+      const c = sum - a - b;
+      if (c < min || c > max) continue;
+      out.push([a,b,c]);
+    }
+    return out;
+  }
+
+  function pickComposantes(impactText, rng, log) {
+    const c = parseAtLeastConstraint(impactText);
+    const combos = enumerateTriplets(3, 6, 13).filter(([corps, coeur, esprit]) => {
+      for (const m of c.mins) {
+        const k = norm(m.key).toLowerCase();
+        if (k === "corps" && corps < m.min) return false;
+        if ((k === "coeur" || k === "cœur") && coeur < m.min) return false;
+        if (k === "esprit" && esprit < m.min) return false;
+      }
+      if (c.anyOf) {
+        const keys = c.anyOf.keys.map(x => norm(x).toLowerCase());
+        const ok = keys.some(k => ((k === "coeur" || k === "cœur") ? coeur >= c.anyOf.min : (k === "esprit" ? esprit >= c.anyOf.min : (k === "corps" ? corps >= c.anyOf.min : false))));
+        if (!ok) return false;
+      }
+      return true;
+    });
+    if (!combos.length) throw new Error("Aucun triplet Composantes valide: " + impactText);
+    const pick = rng.pickOne(combos);
+    log.push("pick_composantes", { impact: norm(impactText)||"(aucun)", options: combos.length, picked: { corps: pick[0], coeur: pick[1], esprit: pick[2] } });
+    return { corps: pick[0], coeur: pick[1], esprit: pick[2] };
+  }
+
+  function pickMoyens(impactText, rng, log) {
+    const c = parseAtLeastConstraint(impactText);
+    const combos = enumerateTriplets(1, 4, 8).filter(([perception, action, resistance]) => {
+      for (const m of c.mins) {
+        const k = norm(m.key).toLowerCase();
+        if (k === "perception" && perception < m.min) return false;
+        if (k === "action" && action < m.min) return false;
+        if ((k === "resistance" || k === "résistance") && resistance < m.min) return false;
+      }
+      if (c.anyOf) {
+        const keys = c.anyOf.keys.map(x => norm(x).toLowerCase());
+        const ok = keys.some(k => (k === "perception" ? perception >= c.anyOf.min :
+                                 (k === "action" ? action >= c.anyOf.min :
+                                 ((k === "resistance" || k === "résistance") ? resistance >= c.anyOf.min : false))));
+        if (!ok) return false;
+      }
+      return true;
+    });
+    if (!combos.length) throw new Error("Aucun triplet Moyens valide: " + impactText);
+    const pick = rng.pickOne(combos);
+    log.push("pick_moyens", { impact: norm(impactText)||"(aucun)", options: combos.length, picked: { perception: pick[0], action: pick[1], resistance: pick[2] } });
+    return { perception: pick[0], action: pick[1], resistance: pick[2] };
+  }
+
+  function computePV(res) { return (res === 1) ? 4 : (res === 2 ? 5 : 6); }
+  function computeSouffle(coeur) { return (coeur <= 4) ? 5 : 6; }
+  function computePsy(esprit) { return (esprit <= 4) ? 4 : 5; }
+
+  // =========================================================
+  // CIBLES
+  // =========================================================
+  function enumerateQuads(min, max, sum) {
+    const out = [];
+    for (let a = min; a <= max; a++) for (let b = min; b <= max; b++) for (let c = min; c <= max; c++) {
+      const d = sum - a - b - c;
+      if (d < min || d > max) continue;
+      out.push([a,b,c,d]);
+    }
+    return out;
+  }
+
+  function parseFixedTargets(text) {
+    const t0 = norm(text);
+    if (!t0 || /^Aucune consigne$/i.test(t0)) return [];
+    const t = t0.replace(/(-1|0|1)(?=[A-Za-zÀ-ÖØ-öø-ÿ])/g, "$1 "); // "Humain -1Artificiel +1" -> espace
+    const keys = ["Nature","Humain","Artificiel","Surnaturel"];
+    const out = [];
+    for (const k of keys) {
+      const re = new RegExp(`\\b${k}\\b\\s*([+-]\\s*\\d)`, "i");
+      const m = t.match(re);
+      if (m) out.push({ key: k, val: parseInt(m[1].replace(/\s+/g, ""), 10) });
+    }
+    return out;
+  }
+
+  function pickTargets(impactText, rng, log) {
+    const fixed = parseFixedTargets(impactText);
+    const fixedMap = new Map(fixed.map(x => [x.key.toLowerCase(), x.val]));
+    const combos = enumerateQuads(-1, 1, 0).filter(([nature, humain, artificiel, surnaturel]) => {
+      if (nature === 0 && humain === 0 && artificiel === 0 && surnaturel === 0) return false;
+      if (fixedMap.has("nature") && nature !== fixedMap.get("nature")) return false;
+      if (fixedMap.has("humain") && humain !== fixedMap.get("humain")) return false;
+      if (fixedMap.has("artificiel") && artificiel !== fixedMap.get("artificiel")) return false;
+      if (fixedMap.has("surnaturel") && surnaturel !== fixedMap.get("surnaturel")) return false;
+      return true;
+    });
+    if (!combos.length) throw new Error("Aucun quadruplet Cibles valide: " + impactText);
+    const pick = rng.pickOne(combos);
+    log.push("pick_cibles", { impact: norm(impactText)||"(aucun)", options: combos.length, picked: { nature: pick[0], humain: pick[1], artificiel: pick[2], surnaturel: pick[3] } });
+    return { nature: pick[0], humain: pick[1], artificiel: pick[2], surnaturel: pick[3] };
+  }
+
+  // =========================================================
+  // ORIGINES / RELIGIONS
+  // =========================================================
+  const REL_BY_NAME = new Map(DATA.RELIGIONS.map(r => [norm(r.religion), { religion: norm(r.religion), energy: norm(r.energy), talents: String(r.talents ?? "") }]));
+
+  function parseReligionMapping(cellText) {
+    const t = norm(cellText);
+    const re = /(\d{1,3}(?:\s*-\s*\d{1,3})?)\s*-\s*([^0-9]+?)(?=(\d{1,3}(?:\s*-\s*\d{1,3})?)\s*-\s*|$)/g;
+    const out = [];
+    let m;
+    while ((m = re.exec(t)) !== null) {
+		let label = norm(m[2]);
+
+		// Nettoyage: retire les tirets décoratifs en fin de libellé ("Voie obscure -")
+		label = label.replace(/\s*[-–—]\s*$/g, "").trim();
+
+		out.push({ range: m[1].replace(/\s+/g, ""), label });
+	}
+    if (!out.length) throw new Error("Religion mapping illisible: " + cellText);
+    return out;
+  }
+
+  function pickReligionFromMapping(cellText, d100, log, ctx) {
+    const entries = parseReligionMapping(cellText);
+    const matches = entries.filter(e => matchD100(d100, e.range));
+    log.push("religion_mapping", { ctx, d100, entries, matches: matches.length });
+    if (matches.length !== 1) throw new Error(`Religion mapping ambigu (${ctx}) d100=${d100} matches=${matches.length}`);
+    return matches[0].label;
+  }
+
+  function determineZoneFromArchetypeZoneField(zoneField, rng, log) {
+    const z = norm(zoneField);
+    if (!/lancer\s*1D3/i.test(z)) return z;
+    const d = rng.rollInt(1,3);
+    log.push("roll", { what:"Zone d’origine via 1D3 (cas spécial)", value:d, raw: z });
+    return (d === 1) ? "Vieux Monde" : (d === 2) ? "Afrique" : "Nouveau Monde";
+  }
+
+  function pickOriginAndReligion(archetypeName, zoneField, rng, log) {
+    const arche = norm(archetypeName);
+    const zone = determineZoneFromArchetypeZoneField(zoneField, rng, log);
+    const isOcc = (arche === "Occultiste");
+
+    if (zone === "Vieux Monde") {
+      const dO = rng.rollInt(1,100);
+      log.push("roll", { what:"Origine Vieux Monde (1D100)", value:dO });
+      const o = pickByD100(DATA.ORIGINE_VM, dO, log, "Origine-Vieux Monde");
+
+      const dR = rng.rollInt(1,100);
+      log.push("roll", { what:"Religion Vieux Monde (1D100)", value:dR, occultiste:isOcc });
+      const mappingCell = isOcc ? o.rel_occ : o.rel_non;
+      const religion = pickReligionFromMapping(mappingCell, dR, log, isOcc ? "VM occultiste" : "VM non-occultiste");
+
+      if (!REL_BY_NAME.has(religion)) throw new Error("Religion introuvable: " + religion);
+      return { zone, originKey: norm(o.pays), religion };
+    }
+
+    if (zone === "Afrique") {
+      const dO = rng.rollInt(1,100);
+      log.push("roll", { what:"Origine Afrique (1D100)", value:dO });
+      const o = pickByD100(DATA.ORIGINE_AF, dO, log, "Origine-Afrique");
+      const religion = norm(o.religion);
+      if (!REL_BY_NAME.has(religion)) throw new Error("Religion introuvable: " + religion);
+      return { zone, originKey: norm(o.peuple), religion };
+    }
+
+    if (zone === "Nouveau Monde") {
+      const dO = rng.rollInt(1,100);
+      log.push("roll", { what:"Origine Nouveau Monde (1D100)", value:dO });
+      const o = pickByD100(DATA.ORIGINE_NM, dO, log, "Origine-Nouveau Monde");
+      const religion = norm(o.religion);
+      if (!REL_BY_NAME.has(religion)) throw new Error("Religion introuvable: " + religion);
+      return { zone, originKey: norm(o.peuple), religion };
+    }
+
+    throw new Error("Zone inconnue: " + zone);
+  }
+
+  // =========================================================
+  // ÉNERGIES
+  // =========================================================
+  const SPECIALS = ["Héroïsme","Vaudou","Foi","Magie noire","K’áaxil"];
+
+  function parseEnergyDirective(text) {
+    const t = norm(text);
+    if (!t || /^Aucune consigne$/i.test(t)) return { type: "none" };
+    if (/Pas d['’]énergie magique/i.test(t)) return { type: "no_magic" };
+    if (/Celle de sa religion/i.test(t)) return { type: "from_religion" };
+    const m = t.match(/^(.+?)\s+1$/);
+    if (m) return { type: "fix_one", key: norm(m[1]) };
+    return { type: "unknown", raw: t };
+  }
+
+  function enumerateEnergies(impactDir, imposedSpecial, log) {
+    const out = [];
+    for (let p = 0; p <= 2; p++) for (let ra = 0; ra <= 2; ra++) for (let pr = 0; pr <= 2; pr++) {
+      for (const chosen of [null, ...SPECIALS]) {
+        const e = { "Puissance": p, "Rapidité": ra, "Précision": pr, "Héroïsme":0, "Vaudou":0, "Foi":0, "Magie noire":0, "K’áaxil":0 };
+        if (chosen) e[chosen] = 1;
+
+        if (imposedSpecial) {
+          if (!(imposedSpecial in e)) continue;
+          for (const s of SPECIALS) e[s] = 0;
+          e[imposedSpecial] = 1;
+        }
+
+        if (impactDir.type === "no_magic") {
+          e["Vaudou"]=0; e["Foi"]=0; e["Magie noire"]=0; e["K’áaxil"]=0;
+        }
+
+        const total = Object.values(e).reduce((a,b)=>a+b,0);
+        if (total !== 4) continue;
+
+        // exclusivité parmi SPECIALS déjà assurée
+        out.push(e);
+      }
+    }
+    log.push("enumerate_energies", { count: out.length, impact: impactDir, imposedSpecial });
+    return out;
+  }
+
+  function pickEnergies(archetypeName, impactEnergyText, religion, rng, log) {
+    const arche = norm(archetypeName);
+    const isOcc = (arche === "Occultiste");
+    const impactDir = parseEnergyDirective(impactEnergyText);
+
+    let imposedSpecial = null;
+    if (isOcc || impactDir.type === "from_religion") {
+      const rel = REL_BY_NAME.get(religion);
+      const d = parseEnergyDirective(rel.energy);
+      if (d.type !== "fix_one") throw new Error("Énergie associée religion illisible: " + rel.energy);
+      imposedSpecial = d.key;
+      log.push("energy_from_religion", { religion, directive: rel.energy, imposedSpecial });
+    } else if (impactDir.type === "fix_one") {
+      imposedSpecial = impactDir.key;
+    }
+
+    const combos = enumerateEnergies(impactDir, imposedSpecial, log);
+    if (!combos.length) throw new Error("Aucune allocation d’énergies valide.");
+    const picked = rng.pickOne(combos);
+    log.push("pick_energies", { picked });
+    return picked;
+  }
+
+  // =========================================================
+  // TALENTS: parsing directives imposées + sélection aléatoire (règles v2.3)
+  // =========================================================
+
+  function parseImposedTalentDirectives(text) {
+  const t = norm(text);
+  if (!t || /^Pas de consigne$/i.test(t)) return [];
+  if (/Ceux de sa religion/i.test(t)) return [{ kind: "from_religion" }];
+
+  // IMPORTANT : décolle les directives si elles ont été concaténées dans DATA
+  const raw = deglueTalentDirectives(text);
+
+  const lines = raw
+    .split("\n")
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
+  const out = [];
+  const lineRx = /^(.+?)(?:\s*:?|\s+)\s*(\+?1|0)\s*$/;
+
+  for (const line of lines) {
+    const m = line.match(lineRx);
+    if (!m) throw new Error("Talents imposés illisibles (ligne): " + line);
+    out.push({ kind: "talent", name: norm(m[1]), level: parseInt(m[2], 10) });
+  }
+
+  if (!out.length) throw new Error("Talents imposés illisibles: " + text);
+  return out;
+  
+  }
+
+  function parseReligionTalents(text, rng, log, religionName) {
+    const s = deglueTalentDirectives(text).trim();
+    const hasOu = /\bou\b/i.test(s);
+
+    // Extrait toutes paires "Nom : +1/0"
+    const rx = /([^:]+?)\s*:\s*(\+?1|0)\b/g;
+    const tokens = [];
+    let m;
+    while ((m = rx.exec(s)) !== null) {
+      let name = norm(m[1]);
+
+      // Nettoyage: "ou Sorcellerie" -> "Sorcellerie"
+      // (cas des formulations "A : +1 ou B : +1")
+      name = name.replace(/^(?:ou|Ou)\s+/g, "");
+
+      // Nettoyage complémentaire: si jamais un séparateur traîne en fin/début
+      name = name.replace(/^[,;]\s*/g, "").replace(/\s*[,;]\s*$/g, "");
+
+      tokens.push({ name, level: parseInt(m[2], 10) });
+    }
+
+    if (!tokens.length) {
+      log.push("warn", { ctx:"religion_talents_parse", religion: religionName, raw: s });
+      return [];
+    }
+
+    if (hasOu) {
+      // Cas "A : +1 ou B : +1 ..." => choisir aléatoirement l’un des talents +1 concernés par "ou"
+      // Implémentation: si deux talents level=1 sont présents, choisir 1 à chance égale.
+      const plusOnes = tokens.filter(t => t.level === 1);
+      if (plusOnes.length >= 2) {
+        const chosen = rng.pickOne(plusOnes);
+        log.push("religion_talents_ou", { religion: religionName, candidates: plusOnes.map(x=>x.name), chosen: chosen.name });
+        return [chosen, ...tokens.filter(t => t.level !== 1)];
+      }
+    }
+    return tokens;
+  }
+
+  function collectImposedTalents(archetypeRow, religion, rng, log) {
+    const imposed = [];
+
+    // Archetype impacts
+    const dir = parseImposedTalentDirectives(archetypeRow.impact_talents);
+    if (dir.some(x => x.kind === "from_religion")) {
+      const rel = REL_BY_NAME.get(religion);
+      const relDirs = parseReligionTalents(rel.talents, rng, log, rel.religion);
+      for (const d of relDirs) imposed.push({ ...d, source: "religion" });
+      log.push("imposed_talents", { source:"religion", religion, imposed });
+      return imposed;
+    }
+
+    for (const d of dir) {
+      if (d.kind !== "talent") continue;
+      imposed.push({ name: d.name, level: d.level, source: "archetype" });
+    }
+    log.push("imposed_talents", { source:"archetype", imposed });
+    return imposed;
+  }
+
+  function pickSocial(rng, log) {
+    const d = rng.rollInt(1,100);
+    log.push("roll", { what:"Milieu social (1D100)", value:d });
+    if (d <= 40) return "Grande pauvreté, misère";
+    if (d <= 90) return "Milieu humble dont le travail est exploité : paysans, manouvriers.";
+    return "Petite bourgeoisie : artisans spécialisés, marchands, bas clergé.";
+  }
+
+  function pickSex(archetypeName, rng, log) {
+    const a = norm(archetypeName).toLowerCase();
+    if (a.includes("prostitué")) {
+      const d = rng.rollInt(1,100);
+      log.push("roll", { what:"Sexe (Prostitué(e) 99/1)", value:d });
+      return (d <= 99) ? "Femme" : "Homme";
+    }
+    const d = rng.rollInt(1,2);
+    log.push("roll", { what:"Sexe (50/50)", value:d });
+    return (d === 1) ? "Homme" : "Femme";
+  }
+
+  // Pools utilitaires
+  function listOriginsByZone(zone) {
+    if (zone === "Vieux Monde") return DATA.ORIGINE_VM.map(x => norm(x.pays));
+    if (zone === "Afrique") return DATA.ORIGINE_AF.map(x => norm(x.peuple));
+    if (zone === "Nouveau Monde") return DATA.ORIGINE_NM.map(x => norm(x.peuple));
+    return [];
+  }
+
+  function languageForOrigin(originKey, log) {
+    const k = norm(originKey);
+    const v = DATA.LANGUES[k];
+    if (!v) {
+      log.push("warn", { ctx:"langues", origin:k, msg:"Aucune correspondance trouvée, fallback=origine" });
+      return k;
+    }
+    return v;
+  }
+
+  function pickForeignLanguage(rng, log) {
+    const d = rng.rollInt(1,100);
+    const zone = (d <= 90) ? "Vieux Monde" : (rng.rollInt(1,2) === 1 ? "Afrique" : "Nouveau Monde");
+    log.push("roll", { what:"Langue étrangère (90% Vieux Monde / 10% autres)", d100:d, pickedZone: zone });
+
+    const pool = listOriginsByZone(zone);
+    const key = rng.pickOne(pool);
+    const lang = languageForOrigin(key, log);
+    log.push("pick_langue_etrangere", { zone, originPicked: key, language: lang });
+    return lang;
+  }
+
+  function weaponCategoryForZone(zone, rng, log) {
+    const pool = DATA.ARMES[zone] || [];
+    if (!pool.length) {
+      log.push("warn", { ctx:"armes", zone, msg:"Aucune arme disponible, fallback=Épées" });
+      return "Epées";
+    }
+    const cat = rng.pickOne(pool);
+    log.push("pick_arme_blanche", { zone, category: cat });
+    return cat;
+  }
+
+  function instrumentForZone(zone, rng, log) {
+    const pool = DATA.INSTRUMENTS[zone] || [];
+    if (!pool.length) {
+      log.push("warn", { ctx:"instruments", zone, msg:"Aucun instrument disponible, fallback=Tambours" });
+      return "Tambours";
+    }
+    if (zone === "Afrique" && pool.includes("Tambours")) {
+      log.push("pick_instrument", { zone, rule:"Afrique -> Tambours en priorité", instrument:"Tambours" });
+      return "Tambours";
+    }
+    const inst = rng.pickOne(pool);
+    log.push("pick_instrument", { zone, instrument: inst });
+    return inst;
+  }
+
+  // Sélection des talents aléatoires avec règles (p)/(s), colonnes, duplications autorisées (Musique, Arme blanche)
+  function selectTalents(imposed, social, zone, rng, log) {
+    // Résoudre les imposés vers tokens existants
+    const assignedPlus1 = [];
+    const assigned0 = [];
+
+    // compteurs duplications autorisées
+    const repeats = new Map(); // base -> count
+    const allowRepeatBase = new Set([
+      "Musique (chant, danse, instrument)",
+      "Arme blanche (type à préciser)"
+    ]);
+
+    function incBase(base) {
+      repeats.set(base, (repeats.get(base) || 0) + 1);
+    }
+    function canTake(tokenHit) {
+      const base = tokenHit.meta.base;
+      if (!allowRepeatBase.has(base)) {
+        // unicité sur base
+        return (repeats.get(base) || 0) === 0;
+      }
+      // Arme blanche max 3
+      if (base === "Arme blanche (type à préciser)") return (repeats.get(base) || 0) < 3;
+      // Musique sans limite dans procédure
+      return true;
+    }
+
+    for (const imp of imposed) {
+      const resolved = resolveTalentRef(imp.name, log, `imposed/${imp.source}`);
+      if (!canTake(resolved)) {
+        log.push("warn", { ctx:"imposed_duplicate_block", talent: resolved.token, base: resolved.meta.base, level: imp.level });
+        continue;
+      }
+      incBase(resolved.meta.base);
+
+      const rec = { token: resolved.token, base: resolved.meta.base, col: resolved.col, flags: resolved.meta.flags, level: imp.level, source: imp.source };
+      if (imp.level === 1) assignedPlus1.push(rec);
+      else if (imp.level === 0) assigned0.push(rec);
+      else throw new Error("Niveau talent imposé non supporté: " + imp.level);
+    }
+
+    // Pool général talents (hors imposés déjà pris par base si non-repeat)
+    const all = DATA.TALENTS
+      .map(t => TALENTS_BY_TOKEN.get(norm(t.token)))
+      .filter(Boolean);
+
+    function alreadyHasBase(base) { return (repeats.get(base) || 0) > 0; }
+
+    function pickCandidate(filterFn, forbidS) {
+      const pool = all.filter(t => {
+        if (!filterFn(t)) return false;
+        if (!canTake(t)) return false;
+        if (forbidS && t.meta.flags.s) return false;
+        return true;
+      });
+      if (!pool.length) return null;
+      return rng.pickOne(pool);
+    }
+
+    function maybeKeepSpecialS(candidate, isImposed) {
+      if (isImposed) return true;
+      if (!candidate.meta.flags.s) return true;
+      // règle v2.3: si (s) non imposé, 1D10, garder uniquement sur 1 sinon reroll non-(s)
+      const d = rng.rollInt(1,10);
+      log.push("roll", { what:"Filtre talent (s) non imposé (1D10, garder sur 1)", talent:candidate.token, value:d });
+      return d === 1;
+    }
+
+    // Cibles: +1 total 6 ; 0 total 4
+    // Règle: il faut 5 talents suivis de (p) au niveau +1 (y compris imposés si (p))
+    function countPPlus1() { return assignedPlus1.filter(x => x.flags.p).length; }
+    function ensureColumnCoverage(list, requiredCols) {
+      const have = new Set(list.map(x => x.col));
+      for (const col of requiredCols) {
+        if (have.has(col)) continue;
+        // On essaye de combler avec un talent qui respecte la contrainte de la phase
+        // Cette fonction est appelée dans des phases (p/+1, puis 0) avec filtre externe.
+        return false;
+      }
+      return true;
+    }
+
+    // Phase A: assurer 5 talents (p) en +1
+    const requiredColsP = ["X","-4","-2","0"];
+
+    while (countPPlus1() < 5) {
+      // Pour favoriser la couverture de colonnes, on tente de choisir un (p) d'une colonne manquante en priorité.
+      const currentP = assignedPlus1.filter(x => x.flags.p);
+      const have = new Set(currentP.map(x => x.col));
+      const missing = requiredColsP.filter(c => !have.has(c));
+      let cand = null;
+
+      if (missing.length) {
+        const wantedCol = rng.pickOne(missing);
+        cand = pickCandidate(t => t.meta.flags.p && t.col === wantedCol, /*forbidS*/ false);
+        if (cand) log.push("talent_pick_bias", { phase:"plus1_p", reason:"col_missing", wantedCol, picked:cand.token });
+      }
+      if (!cand) cand = pickCandidate(t => t.meta.flags.p, /*forbidS*/ false);
+      if (!cand) throw new Error("Impossible de compléter les 5 talents (p) à +1 (pool vide).");
+
+      if (!maybeKeepSpecialS(cand, /*isImposed*/ false)) {
+        // reroll non-(s)
+        const repl = pickCandidate(t => t.meta.flags.p, /*forbidS*/ true);
+        if (!repl) throw new Error("Impossible de remplacer un talent (s) rejeté (phase +1/p).");
+        cand = repl;
+        log.push("talent_s_replaced", { phase:"plus1_p", replacedBy: cand.token });
+      }
+
+      incBase(cand.meta.base);
+      assignedPlus1.push({ token:cand.token, base:cand.meta.base, col:cand.col, flags:cand.meta.flags, level:1, source:"random" });
+      log.push("talent_added", { phase:"plus1_p", token:cand.token, col:cand.col, flags:cand.meta.flags });
+    }
+
+    // Vérifier couverture colonnes sur les 5 talents (p) (si plus de 5, on considère les 5 premiers (p) chronologiques)
+    {
+      const pList = assignedPlus1.filter(x => x.flags.p).slice(0,5);
+      const have = new Set(pList.map(x => x.col));
+      const missing = requiredColsP.filter(c => !have.has(c));
+      if (missing.length) {
+        // correction déterministe: ajouter des (p) supplémentaires pour couvrir (plutôt que remplacer) puis on tronque ailleurs si besoin
+        log.push("warn", { ctx:"coverage_plus1_p", msg:"Couverture colonnes incomplète sur les 5 (p) initiaux; ajout correctif", missing });
+        for (const col of missing) {
+          let cand = pickCandidate(t => t.meta.flags.p && t.col === col, /*forbidS*/ true) || pickCandidate(t => t.meta.flags.p && t.col === col, /*forbidS*/ false);
+          if (!cand) throw new Error("Impossible de combler la colonne manquante (p/+1): " + col);
+          if (!maybeKeepSpecialS(cand, false)) {
+            const repl = pickCandidate(t => t.meta.flags.p && t.col === col, /*forbidS*/ true);
+            if (!repl) throw new Error("Impossible de remplacer un talent (s) rejeté (coverage).");
+            cand = repl;
+          }
+          incBase(cand.meta.base);
+          assignedPlus1.push({ token:cand.token, base:cand.meta.base, col:cand.col, flags:cand.meta.flags, level:1, source:"random_fixup" });
+          log.push("talent_added", { phase:"plus1_p_fixup", token:cand.token, col:cand.col, flags:cand.meta.flags });
+        }
+      }
+    }
+
+    // Phase B: choisir le 6e talent à +1 (Lire et écrire si Petite bourgeoisie)
+    while (assignedPlus1.length < 6) {
+      if (social.startsWith("Petite bourgeoisie")) {
+        const must = resolveTalentRef("Lire et écrire", log, "social_bourgeoisie");
+        if (canTake(must)) {
+          incBase(must.meta.base);
+          assignedPlus1.push({ token:must.token, base:must.meta.base, col:must.col, flags:must.meta.flags, level:1, source:"social_rule" });
+          log.push("talent_added", { phase:"plus1_6th", rule:"bourgeoisie->Lire et écrire", token:must.token });
+          break;
+        }
+        log.push("warn", { ctx:"bourgeoisie_lire_ecrire", msg:"Lire et écrire déjà pris / bloqué; fallback aléatoire." });
+      }
+
+      let cand = pickCandidate(_t => true, /*forbidS*/ false);
+      if (!cand) throw new Error("Impossible de choisir le 6e talent à +1 (pool vide).");
+
+      if (!maybeKeepSpecialS(cand, false)) {
+        const repl = pickCandidate(_t => true, /*forbidS*/ true);
+        if (!repl) throw new Error("Impossible de remplacer un talent (s) rejeté (6e +1).");
+        cand = repl;
+      }
+
+      incBase(cand.meta.base);
+      assignedPlus1.push({ token:cand.token, base:cand.meta.base, col:cand.col, flags:cand.meta.flags, level:1, source:"random" });
+      log.push("talent_added", { phase:"plus1_6th", token:cand.token, col:cand.col, flags:cand.meta.flags });
+    }
+
+    // Phase C: 4 talents niveau 0 : au moins un X, un -4, un -2 ; aucun col 0
+    const requiredCols0 = ["X","-4","-2"];
+    function countCols0(list) { return new Set(list.map(x => x.col)); }
+
+    while (assigned0.length < 4) {
+      const have = countCols0(assigned0);
+      const missing = requiredCols0.filter(c => !have.has(c));
+      let cand = null;
+
+      if (missing.length) {
+        const wantedCol = rng.pickOne(missing);
+        cand = pickCandidate(t => t.col === wantedCol, /*forbidS*/ false);
+        if (cand) log.push("talent_pick_bias", { phase:"zero", reason:"col_missing", wantedCol, picked:cand.token });
+      }
+      if (!cand) cand = pickCandidate(t => t.col !== "0", /*forbidS*/ false);
+      if (!cand) throw new Error("Impossible de compléter les 4 talents niveau 0 (pool vide / contrainte col 0).");
+
+      if (cand.col === "0") continue; // garde-fou
+      if (!maybeKeepSpecialS(cand, false)) {
+        const repl = pickCandidate(t => t.col !== "0", /*forbidS*/ true);
+        if (!repl) throw new Error("Impossible de remplacer un talent (s) rejeté (niveau 0).");
+        cand = repl;
+      }
+
+      incBase(cand.meta.base);
+      assigned0.push({ token:cand.token, base:cand.meta.base, col:cand.col, flags:cand.meta.flags, level:0, source:"random" });
+      log.push("talent_added", { phase:"zero", token:cand.token, col:cand.col, flags:cand.meta.flags });
+    }
+
+    // Vérifier couverture colonnes niveau 0
+    {
+      const have = countCols0(assigned0);
+      const missing = requiredCols0.filter(c => !have.has(c));
+      if (missing.length) {
+        log.push("warn", { ctx:"coverage_zero", msg:"Couverture colonnes incomplète sur talents niveau 0; ajout correctif", missing });
+        for (const col of missing) {
+          let cand = pickCandidate(t => t.col === col, /*forbidS*/ true) || pickCandidate(t => t.col === col, /*forbidS*/ false);
+          if (!cand) throw new Error("Impossible de combler la colonne manquante (niveau 0): " + col);
+          if (!maybeKeepSpecialS(cand, false)) {
+            const repl = pickCandidate(t => t.col === col, /*forbidS*/ true);
+            if (!repl) throw new Error("Impossible de remplacer un talent (s) rejeté (niveau 0 / coverage).");
+            cand = repl;
+          }
+          incBase(cand.meta.base);
+          assigned0.push({ token:cand.token, base:cand.meta.base, col:cand.col, flags:cand.meta.flags, level:0, source:"random_fixup" });
+          log.push("talent_added", { phase:"zero_fixup", token:cand.token, col:cand.col, flags:cand.meta.flags });
+        }
+        // Si on dépasse 4, on tronque en retirant ceux qui ne compromettent pas la couverture (garde le journal)
+        while (assigned0.length > 4) {
+          // enlever un talent dont la colonne est déjà dupliquée
+          const colCounts = new Map();
+          for (const t of assigned0) colCounts.set(t.col, (colCounts.get(t.col) || 0) + 1);
+          const idx = assigned0.findIndex(t => colCounts.get(t.col) > 1);
+          if (idx === -1) break;
+          const removed = assigned0.splice(idx, 1)[0];
+          log.push("talent_trim", { phase:"zero", removed: removed.token, reason:"excess_after_fixup" });
+        }
+      }
+    }
+
+    // Spécialisations
+    function specializeTalent(entry) {
+      const base = entry.base;
+
+      if (base === "Langue étrangère") {
+        const lang = pickForeignLanguage(rng, log);
+        // Ne pas inventer un nouveau talent : conserver le token du .ods, annoter seulement.
+        return { ...entry, display: `${entry.token} — langue tirée: ${lang}` };
+      }
+
+      if (base === "Musique (chant, danse, instrument)") {
+        const d = rng.rollInt(1,3);
+        log.push("roll", { what:"Spécialisation Musique (1=chant,2=danse,3=instrument)", value:d });
+
+        if (d === 1) return { ...entry, display: `${entry.token} — spécialisation: chant` };
+        if (d === 2) return { ...entry, display: `${entry.token} — spécialisation: danse` };
+
+        const inst = instrumentForZone(zone, rng, log);
+        return { ...entry, display: `${entry.token} — instrument: ${inst}` };
+      }
+
+      if (base === "Arme blanche (type à préciser)") {
+        const cat = weaponCategoryForZone(zone, rng, log);
+        // Ne pas inventer un nouveau talent : conserver le token du .ods, annoter seulement.
+        return { ...entry, display: `${entry.token} — catégorie tirée: ${cat}` };
+      }
+
+      return { ...entry, display: entry.token };
+    }
+
+    const plus1 = assignedPlus1.map(specializeTalent);
+    const zero = assigned0.map(specializeTalent);
+
+    log.push("talents_final", {
+      plus1: plus1.map(t => ({ token:t.token, display:t.display, col:t.col, flags:t.flags, source:t.source })),
+      zero: zero.map(t => ({ token:t.token, display:t.display, col:t.col, flags:t.flags, source:t.source }))
+    });
+
+    // Sortie strictement 6 / 4 (si des fixups ont ajouté au-delà)
+    return {
+      plusOne: plus1.slice(0, 6),
+      zero: zero.slice(0, 4),
+    };
+  }
+
+  // =========================================================
+  // GÉNÉRATION COMPLÈTE
+  // =========================================================
+  function generate(seedValue) {
+    const log = makeLog();
+    const rng = makeRng(seedValue);
+    log.push("seed", rng.seed);
+
+    // Étape 1: Archétype
+    const dA = rng.rollInt(1,100);
+    log.push("roll", { what:"Archétype (1D100)", value:dA });
+    const archeRow = pickByD100(DATA.ARCHETYPES, dA, log, "Archétypes");
+
+    // Étapes 2-3: Zone, origine, religion
+    const origin = pickOriginAndReligion(archeRow.archetype, archeRow.zone, rng, log);
+
+    // Étapes 4-5: Composantes
+    const comps = pickComposantes(archeRow.impact_composantes, rng, log);
+
+    // Étapes 6-7: Moyens
+    const means = pickMoyens(archeRow.impact_moyens, rng, log);
+
+    // Étapes 8-10: PV/Souffle/Psy
+    const derived = { pv: computePV(means.resistance), souffle: computeSouffle(comps.coeur), psy: computePsy(comps.esprit) };
+    log.push("derived", derived);
+
+    // Étapes 11-12: Cibles
+    const targets = pickTargets(archeRow.impact_cibles, rng, log);
+
+    // Étapes 13-14: Énergies
+    const energies = pickEnergies(archeRow.archetype, archeRow.impact_energie, origin.religion, rng, log);
+
+    // Étape 15: Talents imposés
+    const imposed = collectImposedTalents(archeRow, origin.religion, rng, log);
+
+    // Étape 16: Milieu social
+    const social = pickSocial(rng, log);
+
+    // Étape 17: Compléter talents (règles (p)/(s) + Langues/Armes/Instruments)
+    const talents = selectTalents(imposed, social, origin.zone, rng, log);
+
+    // Étape 18: Sexe
+    const sex = pickSex(archeRow.archetype, rng, log);
+
+    return {
+      archetype: norm(archeRow.archetype),
+      sex,
+      originZone: origin.zone,
+      originKey: origin.originKey,
+      religion: origin.religion,
+      social,
+      comps,
+      means,
+      targets,
+      energies,
+      derived,
+      talents,
+      logText: log.text()
+    };
+  }
+
+  function renderSheet(ch) {
+    const out = [];
+    out.push("Archétype");
+    out.push(ch.archetype);
+    out.push("");
+
+    out.push("Sexe");
+    out.push(ch.sex);
+    out.push("");
+
+    out.push("Nationalité ou Peuple d’appartenance");
+    out.push(ch.originKey);
+    out.push("");
+
+    out.push("Milieu social d’origine");
+    out.push(ch.social);
+    out.push("");
+
+    out.push("Religion");
+    out.push(ch.religion);
+    out.push("");
+
+    out.push("Corps, Cœur et Esprit");
+    out.push(`Corps ${ch.comps.corps} — Cœur ${ch.comps.coeur} — Esprit ${ch.comps.esprit}`);
+    out.push("");
+
+    out.push("Perception, Action et Résistance");
+    out.push(`Perception ${ch.means.perception} — Action ${ch.means.action} — Résistance ${ch.means.resistance}`);
+    out.push("");
+
+    out.push("Nature, Humain, Artificiel, Surnaturel");
+    out.push(`Nature ${ch.targets.nature} — Humain ${ch.targets.humain} — Artificiel ${ch.targets.artificiel} — Surnaturel ${ch.targets.surnaturel}`);
+    out.push("");
+
+    out.push("Énergies dont le score est supérieur à 0");
+    const epos = Object.entries(ch.energies).filter(([,v]) => v > 0).map(([k,v]) => `${k} ${v}`);
+    out.push(epos.length ? epos.join(" ; ") : "(aucune)");
+    out.push("");
+
+    out.push("Points de vie, Points de Souffle, Points d’Énergie Psychique");
+    out.push(`PV ${ch.derived.pv} — Souffle ${ch.derived.souffle} — Énergie psychique ${ch.derived.psy}`);
+    out.push("");
+
+    out.push("Liste des 6 Talents positionnés à +1");
+    for (const t of ch.talents.plusOne) out.push(`- ${t.display} : +1`);
+    out.push("");
+
+    out.push("Liste des 4 Talents positionnés à 0");
+    for (const t of ch.talents.zero) out.push(`- ${t.display} : 0`);
+    out.push("");
+
+    return out.join("\n");
+  }
+
+  // =========================================================
+  // UI
+  // =========================================================
+  const $ = (sel) => document.querySelector(sel);
+  const seedEl = $("#seed");
+  const btn = $("#generateBtn");
+  const sheetOut = $("#sheetOut");
+  const logOut = $("#logOut");
+  const status = $("#status");
+
+  function setStatus(cls, text) {
+    status.className = "mono " + (cls || "");
+    status.textContent = text || "";
+  }
+
+  btn.addEventListener("click", () => {
+  // Calculer le seed avant tout, pour l’afficher même si generate() échoue.
+  const seedText = seedEl.value;
+  const rngPreview = makeRng(seedText);
+  const seed = rngPreview.seed;
+
+  // Pré-remplir le journal avec le seed, quoi qu’il arrive.
+  logOut.textContent = `[seed] ${seed}\n`;
+
+  try {
+    setStatus("ok", "OK — génération en cours…");
+    const ch = generate(seed); // on passe un seed numérique stable
+    sheetOut.textContent = renderSheet(ch);
+    logOut.textContent = ch.logText; // inclut déjà [seed]
+    setStatus("ok", `OK — seed=${seed}`);
+  } catch (e) {
+    setStatus("err", "ERREUR : " + (e && e.message ? e.message : String(e)));
+    // Conserver le seed + ajouter l'erreur et éventuellement la stack
+    const errMsg = (e && e.message) ? e.message : String(e);
+    const st = (e && e.stack) ? String(e.stack) : "";
+    logOut.textContent =
+      `[seed] ${seed}\n\n` +
+      `[error] ${errMsg}\n` +
+      (st ? `\n[stack]\n${st}\n` : "");
+  }
+});
+
+
+})();
+</script>
+</body>
+</html>
